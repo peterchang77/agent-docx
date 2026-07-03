@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-docx"
+version = "0.1.0"
+description = "CLI tools for editing .docx files with tracked changes and comments, for use by AI agents."
+requires-python = ">=3.12"
+dependencies = [
+    "defusedxml==0.7.1",
+    "lxml==6.1.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+]
+
+[project.scripts]
+docx = "agent_docx.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+agent_docx = ["templates/*.xml", "schemas/**/*.xsd"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
