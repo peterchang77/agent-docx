@@ -35,6 +35,13 @@ def register(subparsers) -> None:
         "--paragraph", type=int, default=None,
         help="Restrict to Nth paragraph (0-indexed)",
     )
+    parser.add_argument(
+        "--allow-field-edit",
+        action="store_true",
+        help="Allow edits that overlap/span a Word field (EndNote citations, "
+        "cross-references, TOC). Without this flag such edits are refused to "
+        "prevent silently corrupting a field.",
+    )
     parser.set_defaults(func=_run)
 
 
@@ -56,7 +63,12 @@ def _run(args: argparse.Namespace) -> int:
         author=args.author,
         date=args.date,
         paragraph_index=args.paragraph,
+        allow_field_edit=args.allow_field_edit,
     )
 
     print(message)
+    # An empty ids list signals a refusal/error (e.g. a field-spanning edit was
+    # declined). Surface that as a non-zero exit so callers and tests notice.
+    if not ids_used and (message.startswith("Refusing") or "would alter a Word field" in message):
+        return 2
     return 0 if ids_used else 1

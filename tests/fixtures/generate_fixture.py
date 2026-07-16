@@ -103,5 +103,41 @@ def generate() -> None:
     print(f"Wrote {FIXTURE_PATH}")
 
 
+FIELD_FIXTURE_PATH = Path(__file__).parent / "sample_fields.docx"
+
+# A minimal document containing a real EndNote-style citation field, used by the
+# field-aware tests (P1/P2/P4). The field packs its BEGIN+instrText+separate and
+# END into runs that also carry text - the exact pattern that used to corrupt
+# when split. Editing "performed" below must leave the field intact.
+FIELD_DOCUMENT_XML = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r><w:t xml:space="preserve">The model performed well.</w:t></w:r>
+      <w:r><w:t xml:space="preserve"> (see training data) </w:t>
+        <w:fldChar w:fldCharType="begin"><w:fldData>qk==</w:fldData></w:fldChar>
+        <w:instrText xml:space="preserve"> ADDIN EN.JS.CITE </w:instrText>
+        <w:fldChar w:fldCharType="separate"/></w:r>
+      <w:r><w:t>[69]</w:t><w:fldChar w:fldCharType="end"/></w:r>
+      <w:r><w:t xml:space="preserve"> for details.</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>
+"""
+
+
+def generate_field_sample() -> None:
+    """Write sample_fields.docx: a doc with a real fldChar/instrText field."""
+    FIELD_FIXTURE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(FIELD_FIXTURE_PATH, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", CONTENT_TYPES)
+        zf.writestr("_rels/.rels", RELS)
+        zf.writestr("docProps/core.xml", CORE_XML)
+        zf.writestr("docProps/app.xml", APP_XML)
+        zf.writestr("word/document.xml", FIELD_DOCUMENT_XML)
+    print(f"Wrote {FIELD_FIXTURE_PATH}")
+
+
 if __name__ == "__main__":
     generate()
+    generate_field_sample()

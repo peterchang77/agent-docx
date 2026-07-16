@@ -150,7 +150,37 @@ def _is_run(node) -> bool:
     return name == "r" or name.endswith(":r")
 
 
+# Run children that carry structure whose order relative to text must be
+# preserved. Adjacent runs containing any of these must NOT be merged: doing so
+# can reshuffle field markers relative to text and corrupt a citation/cross-ref.
+_COMPLEX_CONTENT_TAGS = {
+    "fldChar",
+    "fldData",
+    "instrText",
+    "delInstrText",
+    "drawing",
+    "object",
+    "pict",
+    "AlternateContent",
+}
+
+
+def _run_has_complex_content(run) -> bool:
+    for child in run.childNodes:
+        if child.nodeType != child.ELEMENT_NODE:
+            continue
+        name = child.localName or child.tagName
+        if name.split(":")[-1] in _COMPLEX_CONTENT_TAGS:
+            return True
+    return False
+
+
 def _can_merge(run1, run2) -> bool:
+    # Never merge runs that carry field/drawing structure: their children must
+    # stay in a stable order relative to surrounding text.
+    if _run_has_complex_content(run1) or _run_has_complex_content(run2):
+        return False
+
     rpr1 = _get_child(run1, "rPr")
     rpr2 = _get_child(run2, "rPr")
 

@@ -11,6 +11,7 @@ import defusedxml.minidom
 import lxml.etree
 
 from .base import BaseSchemaValidator
+from .field_integrity import validate_field_chars
 
 
 class DOCXSchemaValidator(BaseSchemaValidator):
@@ -57,6 +58,9 @@ class DOCXSchemaValidator(BaseSchemaValidator):
             all_valid = False
 
         if not self.validate_comment_markers():
+            all_valid = False
+
+        if not self.validate_field_integrity():
             all_valid = False
 
         self.compare_paragraph_counts()
@@ -382,6 +386,37 @@ class DOCXSchemaValidator(BaseSchemaValidator):
             if self.verbose:
                 print("PASSED - All comment markers properly paired")
             return True
+
+    def validate_field_integrity(self):
+        """Check that every <w:fldChar> field is properly opened and closed.
+
+        This is the safety net that catches a truncated field (e.g. an edit that
+        dropped a field's closing ``<w:fldChar w:fldCharType="end"/>``) which the
+        other checks miss because the surrounding XML is still well formed and
+        the display text is unchanged.
+        """
+        errors = []
+
+        for xml_file in self.xml_files:
+            if xml_file.name != "document.xml":
+                continue
+            try:
+                root = lxml.etree.parse(str(xml_file)).getroot()
+                rel = xml_file.relative_to(self.unpacked_dir)
+                errors.extend(f"  {rel}: {e}" for e in validate_field_chars(root))
+            except (lxml.etree.XMLSyntaxError, Exception) as e:
+                errors.append(
+                    f"  {xml_file.relative_to(self.unpacked_dir)}: Error: {e}"
+                )
+
+        if errors:
+            print(f"FAILED - Found {len(errors)} field-integrity violation(s):")
+            for error in errors:
+                print(error)
+            return False
+        if self.verbose:
+            print("PASSED - All <w:fldChar> begin/separate/end balanced")
+        return True
 
     def repair(self) -> int:
         repairs = super().repair()

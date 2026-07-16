@@ -23,6 +23,11 @@ Extracts XML, pretty-prints, merges adjacent runs, simplifies redlines, and conv
 
 Use **"Peter" as the author** for tracked changes and comments, unless the user explicitly requests a different name.
 
+**Writing conventions (author preferences):**
+
+- **Do not use em-dashes** (`—` / `&#x2014;`) in inserted or edited text. Rephrase with commas, parentheses, or separate sentences instead. (En-dashes in ranges/compounds are fine.)
+- **Do not prefix comments** with labels like "Open item:", "Note:", or "TODO:". Write the comment as a plain, direct statement or question.
+
 ### Approach A: `docx edit` (preferred for text edits)
 
 Automates tracked change insertion — finds text across runs, splits at boundaries, wraps in proper `<w:del>`/`<w:ins>` markup with auto-incrementing `w:id` values. No orphaned tags.
@@ -41,9 +46,21 @@ docx edit unpacked/ --find "anchor" --replace " (added)" --mode insert
 docx edit unpacked/ --find "ambiguous" --replace "new" --paragraph 5
 ```
 
-Options: `--author NAME`, `--date ISO_TIMESTAMP`, `--paragraph N` (0-indexed).
+Options: `--author NAME`, `--date ISO_TIMESTAMP`, `--paragraph N` (0-indexed), `--allow-field-edit`.
 
 If the target text appears in multiple paragraphs and `--paragraph` is not specified, the tool lists matching paragraph indices and exits with an error.
+
+#### Word fields (EndNote citations, cross-references, TOC) — important
+
+A Word field is a sequence of `<w:fldChar w:fldCharType="begin">` ... `<w:instrText>` ... `<w:fldChar w:fldCharType="end">` markers. Word routinely packs these markers into the **same run as adjacent text**, which is why naive edits silently corrupt citations.
+
+`docx edit` is now **field-aware**: it preserves field markers when splitting runs, and **refuses** any edit whose anchor overlaps or spans a field (for example, an anchor that visually includes a citation's `[69]` glyph). When a field is detected you will see an error like:
+
+> Refusing to edit: the target text spans a Word field ... Edit around the field, or pass --allow-field-edit.
+
+- **Edit *around* the field** (preferred): choose an anchor that does not include the citation glyph, so the field markers are never inside the matched text.
+- **`--allow-field-edit`** overrides the guard when you genuinely intend to touch a field. The edit still runs a before/after field-integrity self-check and appends a `WARNING` if a field was touched — verify the result.
+- For manual XML edits near a field, preserve every `<w:fldChar>`/`<w:fldData>`/`<w:instrText>` exactly; do not let a run split drop them.
 
 ### Approach B: Direct XML editing (for complex structural changes)
 
@@ -117,6 +134,24 @@ docx pack unpacked/ --check --diff --original document.docx
 ```
 
 `--diff` compares document text after stripping the editing author's tracked changes against the original. Catches accidental untracked edits before packing.
+
+**`--diff` alone is NOT enough when the document contains Word fields** (EndNote citations, cross-references, TOC). Dropping a field's markers while keeping its display glyph (e.g. `[69]`) produces **identical text** but a corrupted citation, and the text diff is blind to it. `--diff` now also reports a *field/citation fingerprint change*, and `--check` runs a full field-integrity validator — but **always do the explicit field check below after editing near a field.**
+
+#### Mandatory post-edit citation/field check
+
+After any edit in a document that contains fields, verify the fields survived before packing:
+
+```bash
+# Field integrity is part of validation (begin/separate/end must balance):
+docx validate unpacked/ --original document.docx
+
+# Or a quick manual guard on raw counts — these must be UNCHANGED vs the original
+# (compare the three numbers before and after your edits):
+python -c "import re,sys; x=open('unpacked/word/document.xml').read(); \
+  print({t: x.count(f'fldCharType=\"{t}\"') for t in ('begin','separate','end')})"
+```
+
+If `begin`/`separate`/`end` counts dropped, or `validate` reports a field-integrity violation, a citation was damaged — restore from the original and edit *around* the field.
 
 ### Scan for formatting artifacts
 

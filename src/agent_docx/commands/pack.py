@@ -93,7 +93,13 @@ def _run_validation(
 
 
 def _run_diff(unpacked_dir: Path, original_file: Path, author: str = "Peter") -> bool:
-    """Lightweight text diff between unpacked dir and original. Returns True if identical."""
+    """Lightweight diff between unpacked dir and original.
+
+    Returns True if both text AND field structure are identical. The field
+    fingerprint check is essential: dropping a citation's field wrapper while
+    keeping its display glyph (e.g. "[69]") yields identical text but a changed
+    field structure, which the text-only diff cannot see.
+    """
     validator = RedliningValidator(unpacked_dir, original_file, author=author)
 
     modified_xml = unpacked_dir / "word" / "document.xml"
@@ -105,6 +111,7 @@ def _run_diff(unpacked_dir: Path, original_file: Path, author: str = "Peter") ->
     mod_root = mod_tree.getroot()
     validator._remove_author_tracked_changes(mod_root)
     modified_text = validator._extract_text_content(mod_root)
+    modified_fields = validator._extract_field_fingerprint(mod_root)
 
     with tempfile.TemporaryDirectory() as tmp:
         with zipfile.ZipFile(original_file, "r") as z:
@@ -116,18 +123,38 @@ def _run_diff(unpacked_dir: Path, original_file: Path, author: str = "Peter") ->
         orig_tree = ET.parse(orig_xml)
         orig_root = orig_tree.getroot()
         original_text = validator._extract_text_content(orig_root)
+        original_fields = validator._extract_field_fingerprint(orig_root)
+
+    ok = True
 
     if modified_text == original_text:
         print("No untracked text differences")
-        return True
-
-    diff = validator._get_git_word_diff(original_text, modified_text)
-    if diff:
-        print("Untracked text differences found:\n")
-        print(diff)
     else:
-        print("Texts differ but unable to generate diff (git not available)")
-    return False
+        diff = validator._get_git_word_diff(original_text, modified_text)
+        if diff:
+            print("Untracked text differences found:\n")
+            print(diff)
+        else:
+            print("Texts differ but unable to generate diff (git not available)")
+        ok = False
+
+    if modified_fields != original_fields:
+        print("\nField/citation fingerprint changed:")
+        print(
+            f"  fldChar begin/separate/end: "
+            f"{original_fields[:3]} -> {modified_fields[:3]}"
+        )
+        print(
+            f"  field-instruction count: "
+            f"{len(original_fields[3])} -> {len(modified_fields[3])}"
+        )
+        print(
+            "  A field (e.g. an EndNote citation) may have been dropped or "
+            "damaged. --diff text comparison alone cannot detect this."
+        )
+        ok = False
+
+    return ok
 
 
 def _condense_xml(xml_file: Path) -> None:

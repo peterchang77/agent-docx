@@ -28,34 +28,6 @@ class RedliningValidator:
             print(f"FAILED - Modified document.xml not found at {modified_file}")
             return False
 
-        try:
-            import xml.etree.ElementTree as ET
-
-            tree = ET.parse(modified_file)
-            root = tree.getroot()
-
-            del_elements = root.findall(".//w:del", self.namespaces)
-            ins_elements = root.findall(".//w:ins", self.namespaces)
-
-            author_del_elements = [
-                elem
-                for elem in del_elements
-                if elem.get(f"{{{self.namespaces['w']}}}author") == self.author
-            ]
-            author_ins_elements = [
-                elem
-                for elem in ins_elements
-                if elem.get(f"{{{self.namespaces['w']}}}author") == self.author
-            ]
-
-            if not author_del_elements and not author_ins_elements:
-                if self.verbose:
-                    print(f"PASSED - No tracked changes by {self.author} found.")
-                return True
-
-        except Exception:
-            pass
-
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
@@ -95,6 +67,16 @@ class RedliningValidator:
                     original_text, modified_text
                 )
                 print(error_message)
+                return False
+
+            # Field fingerprint comparison (P4): display text can be identical
+            # even when a field wrapper (and its instrText/fldData) was dropped.
+            # This is the exact blind spot of the text-only diff above.
+            field_ok, field_msg = self._compare_field_fingerprints(
+                modified_root, original_root
+            )
+            if not field_ok:
+                print(field_msg)
                 return False
 
             if self.verbose:
@@ -225,6 +207,50 @@ class RedliningValidator:
                 for child in reversed(list(del_elem)):
                     parent.insert(del_index, child)
                 parent.remove(del_elem)
+
+    def _extract_field_fingerprint(self, root):
+        """Field fingerprint: counts of fldChar types + sorted instrText codes.
+
+        Captures Word field structure (citations, cross-refs, TOC, ...) so that
+        a dropped field is detected even when its display text is unchanged -
+        the blind spot of a text-only diff. Returns
+        ``(begin, separate, end, tuple(sorted instrText codes))``.
+        """
+        w = self.namespaces["w"]
+        fldchar_tag = f"{{{w}}}fldChar"
+        type_attr = f"{{{w}}}fldCharType"
+        counts = {"begin": 0, "separate": 0, "end": 0}
+        instr = []
+        for el in root.iter():
+            if el.tag == fldchar_tag:
+                ftype = el.get(type_attr)
+                if ftype in counts:
+                    counts[ftype] += 1
+            elif el.tag in (f"{{{w}}}instrText", f"{{{w}}}delInstrText"):
+                instr.append((el.text or "").strip())
+        return (
+            counts["begin"],
+            counts["separate"],
+            counts["end"],
+            tuple(sorted(i for i in instr if i)),
+        )
+
+    def _compare_field_fingerprints(self, modified_root, original_root):
+        """Compare field fingerprints; return (ok, message_or_None)."""
+        modified = self._extract_field_fingerprint(modified_root)
+        original = self._extract_field_fingerprint(original_root)
+        if modified == original:
+            return True, None
+        msg = (
+            f"FAILED - Field/citation fingerprint changed after removing "
+            f"{self.author}'s tracked changes.\n"
+            f"  fldChar begin/separate/end: {original[:3]} -> {modified[:3]}\n"
+            f"  field-instruction count: {len(original[3])} -> {len(modified[3])}\n"
+            f"  A field (e.g. an EndNote citation or cross-reference) was likely "
+            f"dropped or damaged during editing. Note: --diff alone does not "
+            f"guarantee citations survived."
+        )
+        return False, msg
 
     def _extract_text_content(self, root):
         p_tag = f"{{{self.namespaces['w']}}}p"
