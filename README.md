@@ -6,11 +6,27 @@ A `.docx` file is a ZIP archive of XML files. This package provides a single `do
 
 ## Install
 
+### Released CLI
+
+Install the immutable `v0.1.1` release from any machine with [uv](https://docs.astral.sh/uv/):
+
 ```bash
-uv pip install -e .
+uv tool install 'git+https://github.com/peterchang77/agent-docx@v0.1.1'
+docx --help
 ```
 
-This installs the `docx` console script on `PATH` inside the active environment.
+This installs the `docx` console script on `PATH` in uv's isolated tool environment. To replace an existing installation with this release, add `--force` to the install command.
+
+### Development checkout
+
+For local development from a checkout, install the package into the active environment:
+
+```bash
+uv pip install -e ".[dev]"
+pytest
+```
+
+The project requires Python 3.12 or later.
 
 ### Third-Party Python Dependencies
 

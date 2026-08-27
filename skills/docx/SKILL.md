@@ -5,7 +5,18 @@ description: Edit, revise, and redline Word documents with tracked changes, comm
 
 # Word documents
 
-Use the `docx` CLI. It must be on `PATH`. If using the local project, install it from `~/agent-tools/agent-docx` with `uv pip install -e .`.
+Use the `docx` CLI. It must be on `PATH`.
+
+## Installation
+
+If `docx` is unavailable, install the immutable `v0.1.1` release:
+
+```bash
+uv tool install 'git+https://github.com/peterchang77/agent-docx@v0.1.1'
+docx --help
+```
+
+To replace an existing installation with that release, add `--force` to the `uv tool install` command. Do not rely on a checkout at a machine-specific path.
 
 Use `Peter` as the tracked-change and comment author unless the user requests another name. Do not use em dashes in inserted or edited text. Write comments as direct statements or questions without labels such as `TODO:` or `Note:`.
 
