@@ -3,6 +3,8 @@
   "name": "docx",
   "entrypoint": "SKILL.md",
   "files": [
-    {"path": "SKILL.md", "lib_name": "skills/docx/SKILL.md"}
+    {"path": "SKILL.md", "lib_name": "skills/docx/SKILL.md"},
+    {"path": "references/comments.md", "lib_name": "skills/docx/references/comments.md"},
+    {"path": "references/xml-and-validation.md", "lib_name": "skills/docx/references/xml-and-validation.md"}
   ]
 }
